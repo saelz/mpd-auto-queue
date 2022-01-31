@@ -1,0 +1,6 @@
+*.o
+.#*
+*.vim
+vgcore*
+.ccls-cache/
+mpd-auto-queue
