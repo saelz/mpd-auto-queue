@@ -80,10 +80,6 @@ xml_create_rec_item(struct mpd_connection *conn,List *rec_list,
 		return;
 	}
 
-	log_data(LOG_VERBOSE, "Found related artist \"%.*s\" [%.*s]",
-			 (int)new_rec->name.size,new_rec->name.data,
-			 (int)new_rec->mbid.size,new_rec->mbid.data);
-
 	append_to_list(rec_list, new_rec);
 }
 
@@ -193,10 +189,10 @@ get_related_song_by_mbid(struct mpd_connection *conn,List playlist_entites,
 	return select_random_song_from_search(conn,playlist_entites);
 }
 
-extern char *cache_dir;
 
 static struct str
 get_artist_data(List playlist_entites){
+	const struct config *conf = get_conf_data();
 	struct str data = {NULL,0};
 	char *url = NULL;
 	FILE *cache_data = NULL;
@@ -209,9 +205,10 @@ get_artist_data(List playlist_entites){
 							 playlist_entites.items[playlist_entites.length-1]),
 						 MPD_TAG_ARTIST, 0);
 
-	if (use_cache){
-		cache_file = malloc(strlen(cache_dir)+strlen(artist)+strlen(".xml")+1);
-		strcpy(cache_file,cache_dir);
+	if (conf->use_cache){
+		cache_file = malloc(strlen(conf->cache_dir) + strlen(artist) +
+							strlen(".xml")+1);
+		strcpy(cache_file,conf->cache_dir);
 		strcat(cache_file,artist);
 		strcat(cache_file,".xml");
 		cache_data = fopen(cache_file,"r");
@@ -222,6 +219,7 @@ get_artist_data(List playlist_entites){
 		while ((bytes_read = fread(buf, sizeof(*buf), 4096, cache_data)) > 0){
 			ptr = realloc(data.data,data.size+bytes_read);
 			if (ptr == NULL){
+				fclose(cache_data);
 				free(cache_file);
 				free(data.data);
 				return (struct str){NULL,0};
@@ -239,14 +237,14 @@ get_artist_data(List playlist_entites){
 						0,"https://ws.audioscrobbler.com/2.0/?method=artist.getsimilar&artist=",
 						1,artist,
 						0,"&api_key=",
-						0,lastfm_api_key);
+						0,conf->lastfm_api_key);
 
 		log_data(LOG_VERBOSE, "No related artist data found in cache requesting %s",
 			url);
 
 		data = request(url);
 
-		if (use_cache){
+		if (conf->use_cache){
 			cache_data = fopen(cache_file,"w");
 			if (cache_data != NULL){
 				fwrite(data.data,sizeof(*data.data),data.size,cache_data);
@@ -268,7 +266,12 @@ get_related_song(struct mpd_connection *conn,List playlist_entites){
 	struct recommendations *rec;
 	List rec_list;
 	struct mpd_song *related_song = NULL;
-	int random;
+
+	int rng;
+	size_t i,selected_artist;
+	double total = 0,chance = 0;
+	int total_real = 0;
+	size_t longest_artist_title = 0;
 
 	data = get_artist_data(playlist_entites);
 
@@ -278,22 +281,56 @@ get_related_song(struct mpd_connection *conn,List playlist_entites){
 		rec_list = xml_item_to_rec(conn,item);
 
 		if (rec_list.length != 0){
-			random = rand()%rec_list.length;
-			if (random > 0)
-				random = abs((rand()%(int)rec_list.length)-(rand()%random));
 
-			rec = rec_list.items[random];
+			for (i = 0; i < rec_list.length; ++i) {
+				rec = rec_list.items[i];
+				if (verbose_logging_enabled() &&
+					longest_artist_title < rec->name.size)
+					longest_artist_title = rec->name.size;
 
-			log_data(LOG_VERBOSE, "Rolled %d",random);
-			log_data(LOG_VERBOSE, "Using related artist: \"%.*s\" [%.*s]",
-					 (int)rec->name.size,rec->name.data,
-					 (int)rec->mbid.size,rec->mbid.data);
+				total += rec->match;
+			}
 
-			related_song = get_related_song_by_mbid(conn,playlist_entites,
-													rec->mbid);
-			if (related_song == NULL)
-				related_song = get_related_song_by_artist(conn,playlist_entites,
-														  rec->name);
+			for (i = 0; i < rec_list.length; ++i) {
+				rec = rec_list.items[i];
+				log_data(LOG_VERBOSE, "Found related artist: %-*.*s [%.*s] Match: %lf Chance: %lf%%",
+						 longest_artist_title,
+						 (int)rec->name.size,rec->name.data,
+						 (int)rec->mbid.size,rec->mbid.data,
+						 rec->match,(rec->match/total)*100);
+				total_real +=(rec->match/total)*100+.5;
+			}
+
+			rng = (rand()%total_real)+1;
+
+			for (i = 0; i < rec_list.length; ++i) {
+				rec = rec_list.items[i];
+				selected_artist = i;
+				if (rng <= (chance += (rec->match/total)*100+.5))
+					break;
+			}
+
+			log_data(LOG_VERBOSE, "Rolled %d/%d",rng,total_real);
+
+			do {
+				log_data(LOG_VERBOSE, "Using related artist: \"%.*s\" [%.*s]",
+						 (int)rec->name.size,rec->name.data,
+						 (int)rec->mbid.size,rec->mbid.data);
+
+				related_song = get_related_song_by_mbid(conn,playlist_entites,
+														rec->mbid);
+				if (related_song == NULL)
+					related_song = get_related_song_by_artist(conn,
+															  playlist_entites,
+															  rec->name);
+
+				if (i > 0)
+					i--;
+				else
+					i = rec_list.length-1;
+
+				rec = rec_list.items[i];
+			} while (i != selected_artist && related_song == NULL);
 		}
 
 		free_list(&rec_list,free);
@@ -336,28 +373,52 @@ get_random_song(struct mpd_connection *conn,List playlist_entites){
 
 static void
 queue_next_song(struct mpd_connection *conn,List playlist_entites){
+	const struct config *conf = get_conf_data();
 	struct mpd_song *next_song = NULL;
-	int rng = (rand()%100)+1;
-	double weight_total = artist_weight+related_artist_weight+random_weight;
-	double chance = 0;
+	size_t i;
+	int weight_total = 0;
+	int roll_max = 0;
+	int rng,chance = 0;
+	struct queue_method *method;
 
-	log_data(LOG_VERBOSE,"Rolled %d with ratio: %d:%d:%d = %lf %lf %lf",rng,
-			 artist_weight,related_artist_weight,random_weight,
-			 artist_weight/weight_total,related_artist_weight/weight_total,
-			 random_weight/weight_total);
+	for (i = 0; i < conf->queue_methods.length; ++i) {
+		method = conf->queue_methods.items[i];
+		weight_total += method->weight;
+	}
 
+	for (i = 0; i < conf->queue_methods.length; ++i) {
+		method = conf->queue_methods.items[i];
+		if (method->weight == 0)
+			continue;
 
-	if (artist_weight > 0 &&
-		 rng <= (chance += artist_weight/weight_total)*100){
+		roll_max +=(method->weight/(double)weight_total)*100+.5;
+	}
+
+	rng = (rand()%roll_max)+1;
+	for (i = 0; i < conf->queue_methods.length; ++i) {
+		method = conf->queue_methods.items[i];
+		if (method->weight == 0)
+			continue;
+
+		if (rng <= (chance += (method->weight/(double)weight_total)*100+.5))
+			break;
+	}
+
+	switch (method->type){
+	case QM_SAME_ARTIST:
 		log_data(LOG_INFO,"Queuing song by same artist");
 		next_song = get_song_from_same_artist(conn,playlist_entites);
-	} else if (related_artist_weight > 0 &&
-			   rng <= (chance += related_artist_weight/weight_total)*100){
+		break;
+	case QM_RELATED_ARTIST:
 		log_data(LOG_INFO,"Queuing song by related artist");
 		next_song = get_related_song(conn,playlist_entites);
-	} else{
+		break;
+	default:
+		/* fall through */
+	case QM_RANDOM:
 		log_data(LOG_INFO,"Queuing random song");
 		next_song = get_random_song(conn,playlist_entites);
+		break;
 	}
 
 	if (next_song == NULL){
@@ -375,14 +436,15 @@ queue_next_song(struct mpd_connection *conn,List playlist_entites){
 	mpd_song_free(next_song);
 }
 
-
 void
 autoqueue(struct mpd_connection *conn){
 	struct mpd_entity *entity;
-	size_t i;
+	int i;
 	List playlist_entites = new_list();
+	const struct config *conf = get_conf_data();
 
-	for (i = 0; i < auto_queue_amount; ++i) {
+
+	for (i = 0; i < conf->auto_queue_amount; ++i) {
 		mpd_send_list_queue_meta(conn);
 
 		while ((entity = mpd_recv_entity(conn)) != NULL){

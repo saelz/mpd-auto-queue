@@ -11,4 +11,9 @@ enum LOG_LEVEL{
 void
 log_data(enum LOG_LEVEL level, char *format,...);
 
+void
+toggle_verbose_logging(int toggle);
+
+int
+verbose_logging_enabled();
 #endif

@@ -1,22 +1,14 @@
-#include <time.h>
-#include <pwd.h>
-#include <unistd.h>
-#include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <time.h>
+
 #include <mpd/client.h>
-
-
-#include <sys/stat.h>
 #include <sys/select.h>
 
-#include "song_manager.h"
 #include "conf.h"
 #include "log.h"
-
-int verbose = 0;
-
-char *cache_dir;
+#include "song_manager.h"
 
 static void
 msleep(unsigned long milliseconds){
@@ -28,25 +20,24 @@ msleep(unsigned long milliseconds){
 
 int
 main(int argc, char *argv[]){
-
+	const struct config *conf;
 	struct mpd_connection *conn;
-	const char *cache_path,*home_path;
 	struct mpd_status *status;
 	int queue_len = 0;
 	int song_pos = 0;
 	int i;
 
-	for (i = 0; i < argc; ++i) {
+	for (i = 0; i < argc; ++i)
 		if (!strcmp(argv[i],"--verbose"))
-			verbose = 1;
-	}
+			toggle_verbose_logging(1);
 
 
-	/* TODO: read conf */
+	read_conf();
+	conf = get_conf_data();
 
 	srand(time(NULL));
 
-	if ((conn = mpd_connection_new(MPD_HOST,MPD_PORT,0)) == NULL){
+	if ((conn = mpd_connection_new(conf->mpd_host,conf->mpd_port,0)) == NULL){
 		log_data(LOG_ERROR,"Out of memory");
 		return 1;
 	}
@@ -56,23 +47,13 @@ main(int argc, char *argv[]){
 		log_data(LOG_ERROR,"Unable to connect to mpd server: %s",
 				mpd_connection_get_error_message(conn));
 		mpd_connection_free(conn);
+		free_config();
 		return 1;
 	}
 
-	log_data(LOG_INFO,"Connected to MPD server: %s:%d",MPD_HOST,MPD_PORT);
+	log_data(LOG_INFO,"Connected to MPD server: %s:%d",conf->mpd_host,
+			 conf->mpd_port);
 
-	if ((cache_path = getenv("XDG_CACHE_HOME")) != NULL){
-		cache_dir = malloc(strlen(cache_path)+strlen(PROGRAM_DIR_NAME)+1);
-		strcpy(cache_dir, cache_path);
-		strcat(cache_dir,PROGRAM_DIR_NAME);
-	} else{
-		if ((home_path = getenv("HOME")) != NULL)
-			home_path = getpwuid(getuid())->pw_dir;
-		cache_dir = malloc(strlen(home_path)+strlen("/.cache"PROGRAM_DIR_NAME)+1);
-		strcpy(cache_dir, home_path);
-		strcat(cache_dir,"/.cache"PROGRAM_DIR_NAME);
-	}
-	mkdir(cache_dir,0777);
 
 	for (;;) {
 		mpd_send_status(conn);
@@ -82,7 +63,7 @@ main(int argc, char *argv[]){
 		queue_len = mpd_status_get_queue_length(status);
 		song_pos = mpd_status_get_song_pos(status);
 
-		if (queue_len > 0 && queue_len -song_pos <= min_songs_left)
+		if (queue_len > 0 && queue_len -song_pos <= conf->min_songs_left)
 			autoqueue(conn);
 
 		mpd_status_free(status);
@@ -94,7 +75,7 @@ main(int argc, char *argv[]){
 	}
 
 
+	free_config();
 	mpd_connection_free(conn);
-	free(cache_dir);
 	return 0;
 }

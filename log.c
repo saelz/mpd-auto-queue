@@ -8,7 +8,7 @@
 #define YELLOW "\033[1;33m"
 #define RESET "\033[0m"
 
-extern int verbose;
+int verbose = 0;
 
 void
 log_data(enum LOG_LEVEL level, char *format,...){
@@ -51,4 +51,14 @@ log_data(enum LOG_LEVEL level, char *format,...){
 
 	fprintf(stream,RESET"\n");
 
+}
+
+void
+toggle_verbose_logging(int toggle){
+	verbose = toggle;
+}
+
+int
+verbose_logging_enabled(){
+	return verbose;
 }

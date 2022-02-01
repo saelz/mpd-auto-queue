@@ -93,7 +93,7 @@ parse_xml_recur(struct str xml_data,size_t *pos){
 		return NULL;
 
 	item = new_xml_item();
-	for (; *pos <= xml_data.size; (*pos)++) {
+	for (; *pos < xml_data.size; (*pos)++) {
 		switch (state) {
 		case NONE:
 			if (xml_data.data[*pos] == '<'){
