@@ -24,7 +24,7 @@ all: $(BUILD_NAME)
 $(BUILD_NAME): $(OBJS)
 	$(CC) -o $(BUILD_NAME) $(OBJS) $(LDFLAGS)
 
-install:
+install: $(BUILD_NAME)
 	mkdir $(CONF_DIR) -p
 	cp -n $(CONF_NAME) $(CONF_DIR)
 	su -c "install -c $(BUILD_NAME) $(BIN_PATH)"
