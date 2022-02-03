@@ -296,6 +296,7 @@ conf_str_set_value(struct conf_str *key,struct conf_str *value,int line_number){
 						log_data(LOG_ERROR, "Unknown queue method \"%s\" at line %d",
 								 temp_str,line_number);
 						free(method);
+						j--;
 						continue;
 					}
 					append_to_list(conf_items[i].data, method);
@@ -307,8 +308,10 @@ conf_str_set_value(struct conf_str *key,struct conf_str *value,int line_number){
 					 (temp_str = conf_get_next_array_item(value,line_number)) != NULL;
 					 j++){
 					temp = conf_str_to_int(temp_str, key->str, line_number);
-					if (temp < 0)
+					if (temp < 0){
+						j--;
 						continue;
+					}
 
 					if (((List*)conf_items[i].data)->length >= j+1){
 						method = ((List*)conf_items[i].data)->items[j];

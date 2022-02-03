@@ -58,8 +58,8 @@ xml_create_rec_item(struct mpd_connection *conn,List *rec_list,
 
 	new_rec = malloc(sizeof(*new_rec));
 	new_rec->match = 0;
-	new_rec->name.size = 0;
-	new_rec->mbid.size = 0;
+	new_rec->name = (struct str){NULL,0};
+	new_rec->mbid = (struct str){NULL,0};
 
 	if ((child = find_xml_item_child(item,name_tag)) != NULL){
 		new_rec->name = child->data;
@@ -377,7 +377,6 @@ queue_next_song(struct mpd_connection *conn,List playlist_entites){
 	struct mpd_song *next_song = NULL;
 	size_t i;
 	int weight_total = 0;
-	int roll_max = 0;
 	int rng,chance = 0;
 	struct queue_method *method;
 
@@ -386,21 +385,11 @@ queue_next_song(struct mpd_connection *conn,List playlist_entites){
 		weight_total += method->weight;
 	}
 
+	rng = (rand()%weight_total)+1;
 	for (i = 0; i < conf->queue_methods.length; ++i) {
 		method = conf->queue_methods.items[i];
-		if (method->weight == 0)
-			continue;
 
-		roll_max +=(method->weight/(double)weight_total)*100+.5;
-	}
-
-	rng = (rand()%roll_max)+1;
-	for (i = 0; i < conf->queue_methods.length; ++i) {
-		method = conf->queue_methods.items[i];
-		if (method->weight == 0)
-			continue;
-
-		if (rng <= (chance += (method->weight/(double)weight_total)*100+.5))
+		if (rng <= (chance += method->weight))
 			break;
 	}
 
@@ -414,6 +403,7 @@ queue_next_song(struct mpd_connection *conn,List playlist_entites){
 		next_song = get_related_song(conn,playlist_entites);
 		break;
 	default:
+		log_data(LOG_ERROR, "Undefined queue method");
 		/* fall through */
 	case QM_RANDOM:
 		log_data(LOG_INFO,"Queuing random song");
