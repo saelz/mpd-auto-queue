@@ -3,6 +3,8 @@
 
 #include <stddef.h>
 
+#define NEW_LIST {0,NULL}
+
 typedef void (free_func)(void*);
 
 typedef struct list{

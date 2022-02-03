@@ -14,6 +14,7 @@
 
 #define PROGRAM_DIR_NAME "mpd-auto-queue"
 #define CONF_STR (struct conf_str){NULL,0,2}
+#define LEN(x) sizeof(x)/sizeof(*x)
 
 
 enum CONFIG_STATE{
@@ -28,8 +29,35 @@ struct conf_str{
 	size_t size;
 };
 
+enum CONF_TYPE{
+	CONF_TYPE_INT,
+	CONF_TYPE_STR,
+	CONF_TYPE_BOOL,
+	CONF_TYPE_QUEUE_METHOD,
+	CONF_TYPE_QUEUE_WEIGHT,
+};
 
-static struct config *conf = NULL;
+struct conf_item{
+	const char *name;
+	enum CONF_TYPE type;
+	void *data;
+};
+
+
+static struct config conf = {6600,NULL,NULL,1,NEW_LIST,NULL,5,10};
+
+static const struct conf_item conf_items[] =
+{
+	{"mpd_host"             ,CONF_TYPE_STR          ,&conf.mpd_host},
+	{"mpd_port"             ,CONF_TYPE_INT          ,&conf.mpd_port},
+	{"lastfm_api_key"       ,CONF_TYPE_STR          ,&conf.lastfm_api_key},
+	{"use_cache"            ,CONF_TYPE_BOOL         ,&conf.use_cache},
+	{"min_songs_left"       ,CONF_TYPE_INT          ,&conf.min_songs_left},
+	{"auto_queue_amount"    ,CONF_TYPE_INT          ,&conf.auto_queue_amount},
+	{"queue_methods"        ,CONF_TYPE_QUEUE_METHOD ,&conf.queue_methods},
+	{"queue_method_weights" ,CONF_TYPE_QUEUE_WEIGHT ,&conf.queue_methods},
+};
+
 
 static char *
 get_dir(const char *env_var,const char *default_path){
@@ -197,12 +225,14 @@ conf_get_next_array_item(struct conf_str *cstr,int line_number){
 	return return_str;
 }
 
+
 static void
 conf_str_set_value(struct conf_str *key,struct conf_str *value,int line_number){
 	int temp;
-	size_t i;
+	size_t i,j;
 	const char *temp_str;
 	struct queue_method *method;
+	void *item_data;
 
 	key->str_length = trim_whitespace(key->str);
 	value->str_length = trim_whitespace(value->str);
@@ -216,86 +246,84 @@ conf_str_set_value(struct conf_str *key,struct conf_str *value,int line_number){
 		goto end;
 	}
 
-	if (!strcmp(key->str, "mpd_host")){
-		log_data(LOG_VERBOSE, "MPD host set to \"%s\"",value->str);
-		conf->mpd_host = realloc(value->str,value->str_length+1);
-		value->str = NULL;
-	} else if (!strcmp(key->str, "lastfm_api_key")){
-		log_data(LOG_VERBOSE, "last.fm api key set to \"%s\"",value->str);
-		conf->lastfm_api_key = realloc(value->str,value->str_length+1);
-		value->str = NULL;
-	} else if (!strcmp(key->str, "use_cache")){
-		if (value->str[0] == 't' || value->str[0] == 'y'|| value->str[0] == '1')
-			conf->use_cache = 1;
-		else
-			conf->use_cache = 0;
-		log_data(LOG_VERBOSE, "Use cache set to \"%d\"",conf->use_cache);
-	} else if (!strcmp(key->str, "mpd_port")){
-		temp = conf_str_to_int(value->str, key->str, line_number);
-		if (temp != -1)
-			conf->mpd_port = temp;
-		log_data(LOG_VERBOSE, "MPD port set to \"%d\"",conf->mpd_port);
-	} else if (!strcmp(key->str, "min_songs_left")){
-		temp = conf_str_to_int(value->str, key->str, line_number);
-		if (temp != -1)
-			conf->min_songs_left = temp;
-		log_data(LOG_VERBOSE, "min_songs_left set to \"%d\"",conf->min_songs_left);
-	} else if (!strcmp(key->str, "auto_queue_amount")){
-		temp = conf_str_to_int(value->str, key->str, line_number);
-		if (temp != -1)
-			conf->auto_queue_amount = temp;
-		log_data(LOG_VERBOSE, "auto_queue_amount set to \"%d\"",
-				 conf->auto_queue_amount);
-	} else if (!strcmp(key->str, "queue_methods")){
-		for (i = 0;
-			 (temp_str = conf_get_next_array_item(value,line_number)) != NULL;
-			i++) {
-			if (conf->queue_methods.length >= i+1){
-				method = conf->queue_methods.items[i];
-			} else {
-				method = malloc(sizeof(*method));
-				*method = (struct queue_method){QM_UNDEFINED,-1};
-			}
+	for (i = 0; i < LEN(conf_items); i++) {
+		if (!strcmp(key->str,conf_items[i].name)){
+			item_data = conf_items[i].data;
 
-			if (!strcmp(temp_str,"same_artist")){
-				method->type = QM_SAME_ARTIST;
-			} else if (!strcmp(temp_str,"related_artist")){
-				method->type = QM_RELATED_ARTIST;
-			} else if (!strcmp(temp_str,"random")){
-				method->type = QM_RANDOM;
-			} else {
-				log_data(LOG_ERROR, "Unknown queue method \"%s\" at line %d",
-						 temp_str,line_number);
-				free(method);
-				continue;
+			switch (conf_items[i].type) {
+			case CONF_TYPE_STR:
+				*((char**)item_data) = realloc(value->str,value->str_length+1);
+				value->str = NULL;
+				log_data(LOG_VERBOSE, "%s set to \"%s\"",
+						 conf_items[i].name,*((char**)item_data));
+				break;
+			case CONF_TYPE_INT:
+				temp = conf_str_to_int(value->str, key->str, line_number);
+				if (temp != -1)
+					*((int*)item_data) = temp;
+				log_data(LOG_VERBOSE, "%s set to %d",conf_items[i].name,
+						 *((int*)item_data));
+				break;
+			case CONF_TYPE_BOOL:
+				if (value->str[0] == 't' || value->str[0] == 'y'|| value->str[0] == '1')
+					*((int*)item_data) = 1;
+				else
+					*((int*)item_data) = 0;
+				log_data(LOG_VERBOSE, "%s set to %d",
+						 conf_items[i].name,*((int*)item_data));
+
+				break;
+			case CONF_TYPE_QUEUE_METHOD:
+				for (j = 0;
+					 (temp_str = conf_get_next_array_item(value,line_number)) != NULL;
+					 j++) {
+					if (((List*)conf_items[i].data)->length >= j+1){
+						method = ((List*)conf_items[i].data)->items[j];
+					} else {
+						method = malloc(sizeof(*method));
+						*method = (struct queue_method){QM_UNDEFINED,-1};
+					}
+
+					if (!strcmp(temp_str,"same_artist")){
+						method->type = QM_SAME_ARTIST;
+					} else if (!strcmp(temp_str,"related_artist")){
+						method->type = QM_RELATED_ARTIST;
+					} else if (!strcmp(temp_str,"random")){
+						method->type = QM_RANDOM;
+					} else {
+						log_data(LOG_ERROR, "Unknown queue method \"%s\" at line %d",
+								 temp_str,line_number);
+						free(method);
+						continue;
+					}
+					append_to_list(conf_items[i].data, method);
+					log_data(LOG_VERBOSE, "Adding method type \"%s\"",temp_str);
+				}
+				break;
+			case CONF_TYPE_QUEUE_WEIGHT:
+				for (j = 0;
+					 (temp_str = conf_get_next_array_item(value,line_number)) != NULL;
+					 j++){
+					temp = conf_str_to_int(temp_str, key->str, line_number);
+					if (temp < 0)
+						continue;
+
+					if (((List*)conf_items[i].data)->length >= j+1){
+						method = ((List*)conf_items[i].data)->items[j];
+					} else {
+						method = malloc(sizeof(*method));
+						*method = (struct queue_method){QM_UNDEFINED,-1};
+						append_to_list(conf_items[i].data, method);
+					}
+
+					method->weight = temp;
+					log_data(LOG_VERBOSE, "Adding method weight %d",
+							 method->weight);
+				}
+				break;
 			}
-			append_to_list(&conf->queue_methods, method);
-			log_data(LOG_VERBOSE, "Adding method type \"%s\"",temp_str);
 		}
-	} else if (!strcmp(key->str, "queue_method_weights")){
-		for (i = 0;
-			 (temp_str = conf_get_next_array_item(value,line_number)) != NULL;
-			i++){
-			temp = conf_str_to_int(temp_str, key->str, line_number);
-			if (temp < 0)
-				continue;
-
-			if (conf->queue_methods.length >= i+1){
-				method = conf->queue_methods.items[i];
-			} else {
-				method = malloc(sizeof(*method));
-				*method = (struct queue_method){QM_UNDEFINED,-1};
-				append_to_list(&conf->queue_methods, method);
-			}
-
-			method->weight = temp;
-			log_data(LOG_VERBOSE, "Adding method weight %d ",method->weight);
-		}
-	} else {
-		log_data(LOG_ERROR, "Unknown key \"%s\" at line %d",key->str,
-				 line_number);
 	}
-
 end:
 	key->str_length = 0;
 	if (value->str == NULL){
@@ -376,21 +404,10 @@ read_conf(){
 	FILE *config_file = NULL;
 	size_t i;
 
-	if (conf != NULL)
+	if (conf.mpd_host != NULL)
 		return;
 
-	conf = malloc(sizeof(*conf));
-
-
-	conf->mpd_port          = 6600;
-	conf->mpd_host          = NULL;
-	conf->lastfm_api_key    = NULL;
-	conf->use_cache         = 1;
-	conf->queue_methods     = new_list();
-	conf->min_songs_left    = 5;
-	conf->auto_queue_amount = 10;
-
-	conf->cache_dir         = get_cache_dir();
+	conf.cache_dir = get_cache_dir();
 
 	config_file = get_config_file();
 
@@ -399,21 +416,21 @@ read_conf(){
 	else
 		log_data(LOG_ERROR, "Unable to read config");
 
-	if (conf->mpd_host == NULL){
-		conf->mpd_host = malloc(strlen("localhost")+1);
-		strcpy(conf->mpd_host,"localhost");
+	if (conf.mpd_host == NULL){
+		conf.mpd_host = malloc(strlen("localhost")+1);
+		strcpy(conf.mpd_host,"localhost");
 	}
 
 
-	if (conf->queue_methods.length == 0){
+	if (conf.queue_methods.length == 0){
 		method = malloc(sizeof(*method));
 		*method = (struct queue_method){QM_SAME_ARTIST,3};
-		append_to_list(&conf->queue_methods, method);
+		append_to_list(&conf.queue_methods, method);
 
-		if (conf->lastfm_api_key != NULL){
+		if (conf.lastfm_api_key != NULL){
 			method = malloc(sizeof(*method));
 			*method = (struct queue_method){QM_RELATED_ARTIST,4};
-			append_to_list(&conf->queue_methods, method);
+			append_to_list(&conf.queue_methods, method);
 		} else {
 			log_data(LOG_WARNING, "Last.fm api key not provided in "
 					 "configuration file");
@@ -421,16 +438,16 @@ read_conf(){
 
 		method = malloc(sizeof(*method));
 		*method = (struct queue_method){QM_RANDOM,1};
-		append_to_list(&conf->queue_methods, method);
+		append_to_list(&conf.queue_methods, method);
 
 	} else {
-		for (i = 0; i < conf->queue_methods.length; ++i) {
-			method = conf->queue_methods.items[i];
+		for (i = 0; i < conf.queue_methods.length; ++i) {
+			method = conf.queue_methods.items[i];
 			if (method->type != QM_UNDEFINED)
 				queue_method_count++;
 			if (method->weight > 0)
 				queue_weight_count++;
-			if (conf->lastfm_api_key == NULL &&
+			if (conf.lastfm_api_key == NULL &&
 				method->type == QM_RELATED_ARTIST){
 				log_data(LOG_ERROR, "Cannot use queue method "
 						 "\"related_artist\" without providing last.fm "
@@ -452,14 +469,13 @@ read_conf(){
 
 const struct config*
 get_conf_data(){
-	return conf;
+	return &conf;
 }
 
 void
 free_config(){
-	free(conf->mpd_host);
-	free(conf->lastfm_api_key);
-	free(conf->cache_dir);
-	free_list(&conf->queue_methods,&free);
-	free(conf);
+	free(conf.mpd_host);
+	free(conf.lastfm_api_key);
+	free(conf.cache_dir);
+	free_list(&conf.queue_methods,&free);
 }

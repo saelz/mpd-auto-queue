@@ -6,7 +6,7 @@
 
 List
 new_list(){
-	return (List){0,NULL};
+	return (List)NEW_LIST;
 }
 
 void
