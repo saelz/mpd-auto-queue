@@ -13,6 +13,8 @@ just create it.
 
 * `mpd_port` The port used by the MPD server. `default:6600`
 
+* `mpd_password` The password used by the MPD server
+
 * `lastfm_api_key` The api key used to request recommendations from.
 [Last.fm](https://last.fm) you can obtain one
 [here](https://www.last.fm/api/account/create). (It's only required if you use

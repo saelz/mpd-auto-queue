@@ -1,3 +1,4 @@
+#include <mpd/password.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -51,14 +52,25 @@ main(int argc, char *argv[]){
 		return 1;
 	}
 
+
 	log_data(LOG_INFO,"Connected to MPD server: %s:%d",conf->mpd_host,
 			 conf->mpd_port);
+	if (conf->mpd_password != NULL && !mpd_run_password(conn, conf->mpd_password)){
+			log_data(LOG_WARNING, "%s",
+					 mpd_connection_get_error_message(conn));
+	}
 
 
 	for (;;) {
 		mpd_send_status(conn);
 		status = mpd_recv_status(conn);
 		mpd_response_finish(conn);
+
+		if (status == NULL){
+			log_data(LOG_ERROR, "Unable to retrive MPD status: %s",
+					 mpd_connection_get_error_message(conn));
+			break;
+		}
 
 		queue_len = mpd_status_get_queue_length(status);
 		song_pos = mpd_status_get_song_pos(status);

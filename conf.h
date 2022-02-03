@@ -13,6 +13,7 @@ struct config{
 	char *cache_dir;
 	int min_songs_left;
 	int auto_queue_amount;
+	char *mpd_password;
 };
 
 void

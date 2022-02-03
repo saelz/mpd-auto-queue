@@ -44,12 +44,13 @@ struct conf_item{
 };
 
 
-static struct config conf = {6600,NULL,NULL,1,NEW_LIST,NULL,5,10};
+static struct config conf = {6600,NULL,NULL,1,NEW_LIST,NULL,5,10,NULL};
 
 static const struct conf_item conf_items[] =
 {
 	{"mpd_host"             ,CONF_TYPE_STR          ,&conf.mpd_host},
 	{"mpd_port"             ,CONF_TYPE_INT          ,&conf.mpd_port},
+	{"mpd_password"         ,CONF_TYPE_STR          ,&conf.mpd_password},
 	{"lastfm_api_key"       ,CONF_TYPE_STR          ,&conf.lastfm_api_key},
 	{"use_cache"            ,CONF_TYPE_BOOL         ,&conf.use_cache},
 	{"min_songs_left"       ,CONF_TYPE_INT          ,&conf.min_songs_left},
@@ -242,7 +243,8 @@ conf_str_set_value(struct conf_str *key,struct conf_str *value,int line_number){
 		goto end;
 	}
 	if (value->str_length <= 0){
-		log_data(LOG_ERROR, "Value at line %d cannot be blank",line_number);
+		log_data(LOG_ERROR, "Value used with \"%s\" at line %d cannot be blank",
+				 key->str,line_number);
 		goto end;
 	}
 
@@ -326,11 +328,15 @@ conf_str_set_value(struct conf_str *key,struct conf_str *value,int line_number){
 	}
 end:
 	key->str_length = 0;
+	if (key->str != NULL)
+		key->str[0] = '\0';
+
 	if (value->str == NULL){
 		free(value->str);
 		*value = CONF_STR;
 	} else {
 		value->str_length = 0;
+		value->str[0] = '\0';
 	}
 }
 
@@ -477,5 +483,6 @@ free_config(){
 	free(conf.mpd_host);
 	free(conf.lastfm_api_key);
 	free(conf.cache_dir);
+	free(conf.mpd_password);
 	free_list(&conf.queue_methods,&free);
 }
