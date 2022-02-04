@@ -9,9 +9,9 @@ which should be located at `~/.config/mpd-auto-queue/mpd-auto-queue.conf`
 (it will be automatically created when you run `make install`) if not you can
 just create it.
 ### Configuration file variables
-* `mpd_host` The host url of the MPD server. `default:localhost`
+* `mpd_host` The host url of the MPD server. `default:localhost or $MPD_HOST`
 
-* `mpd_port` The port used by the MPD server. `default:6600`
+* `mpd_port` The port used by the MPD server. `default:6600 or $MPD_PORT`
 
 * `mpd_password` The password used by the MPD server
 

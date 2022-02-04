@@ -70,7 +70,7 @@ get_dir(const char *env_var,const char *default_path){
 		strcpy(dir, path);
 		strcat(dir,"/"PROGRAM_DIR_NAME"/");
 	} else{
-		if ((home_path = getenv("HOME")) != NULL)
+		if ((home_path = getenv("HOME")) == NULL)
 			home_path = getpwuid(getuid())->pw_dir;
 		dir = malloc(strlen(home_path) +
 						   strlen(default_path)+1);
@@ -411,10 +411,14 @@ read_conf(){
 	struct queue_method *method;
 	int queue_method_count = 0, queue_weight_count = 0;
 	FILE *config_file = NULL;
+	const char *env_var;
 	size_t i;
 
 	if (conf.mpd_host != NULL)
 		return;
+
+	if ((env_var = getenv("MPD_PORT")) != NULL)
+		conf.mpd_port = atoi(env_var);
 
 	conf.cache_dir = get_cache_dir();
 
@@ -426,8 +430,13 @@ read_conf(){
 		log_data(LOG_ERROR, "Unable to read config");
 
 	if (conf.mpd_host == NULL){
-		conf.mpd_host = malloc(strlen("localhost")+1);
-		strcpy(conf.mpd_host,"localhost");
+		if ((env_var = getenv("MPD_HOST")) != NULL){
+			conf.mpd_host = malloc(strlen(env_var)+1);
+			strcpy(conf.mpd_host,env_var);
+		} else {
+			conf.mpd_host = malloc(strlen("localhost")+1);
+			strcpy(conf.mpd_host,"localhost");
+		}
 	}
 
 
