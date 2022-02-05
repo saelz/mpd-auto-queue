@@ -48,6 +48,16 @@ the song at the end of the queue)
 
 * `random` Enqueues a random song
 
+## Message commands
+You can control mpd-auto-queue via MPD's message system by using an MPD client
+that supports sending messages, for example with MPC you could run: 
+`mpc sendmessage mpd-auto-queue toggle-pause`
+
+* `exit` Causes mpd-auto-queue to exit.
+* `pause` Stops mpd-auto-queue from queueing songs until resumed.
+* `resume` Resumes mpd-auto-queue's queueing of songs.
+* `toggle-pause` Toggles mpd-auto-queue's pause status.
+
 ## Installation
 Dependencies:
 
