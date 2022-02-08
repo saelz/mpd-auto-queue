@@ -1,6 +1,6 @@
+#include <stdarg.h>
 #include <stdio.h>
 #include <time.h>
-#include <stdarg.h>
 
 #include "log.h"
 
@@ -11,14 +11,15 @@
 int verbose = 0;
 
 void
-log_data(enum LOG_LEVEL level, char *format,...){
+log_data(enum LOG_LEVEL level, char *format, ...) {
 	time_t raw_time;
 	struct tm *timeinfo;
 
 	va_list args;
 	FILE *stream;
 
-	const char month[][4] = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
+	const char month[][4] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
+	                         "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
 
 	time(&raw_time);
 	timeinfo = localtime(&raw_time);
@@ -33,32 +34,31 @@ log_data(enum LOG_LEVEL level, char *format,...){
 		break;
 	case LOG_WARNING:
 		stream = stderr;
-		fprintf(stream,YELLOW);
+		fprintf(stream, YELLOW);
 		break;
 	case LOG_ERROR:
 		stream = stderr;
-		fprintf(stream,RED);
+		fprintf(stream, RED);
 		break;
 	}
 
+	fprintf(stream, "<%s %d %.2d:%.2d:%.2d> ", month[timeinfo->tm_mon],
+	        timeinfo->tm_mday, timeinfo->tm_hour, timeinfo->tm_min,
+	        timeinfo->tm_sec);
 
-	fprintf(stream,"<%s %d %.2d:%.2d:%.2d> ",month[timeinfo->tm_mon],timeinfo->tm_mday,
-			timeinfo->tm_hour,timeinfo->tm_min,timeinfo->tm_sec);
-
-	va_start(args,format);
-	vfprintf(stream,format,args);
+	va_start(args, format);
+	vfprintf(stream, format, args);
 	va_end(args);
 
-	fprintf(stream,RESET"\n");
-
+	fprintf(stream, RESET "\n");
 }
 
 void
-toggle_verbose_logging(int toggle){
+toggle_verbose_logging(int toggle) {
 	verbose = toggle;
 }
 
 int
-verbose_logging_enabled(){
+verbose_logging_enabled() {
 	return verbose;
 }

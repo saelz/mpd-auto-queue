@@ -3,8 +3,7 @@
 
 #include "list.h"
 
-
-struct config{
+struct config {
 	int mpd_port;
 	char *mpd_host;
 	char *lastfm_api_key;
@@ -16,12 +15,9 @@ struct config{
 	char *mpd_password;
 };
 
-void
-read_conf();
+void read_conf();
 
-const struct config *
-get_conf_data();
+const struct config *get_conf_data();
 
-void
-free_config();
+void free_config();
 #endif
